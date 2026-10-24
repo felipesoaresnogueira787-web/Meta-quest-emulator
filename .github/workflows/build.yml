@@ -1,57 +1,60 @@
 
-name: Gerar APK TV Flutuante VR
+name: Build VR BOX OS
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
+    paths:
+      - "*.zip"
+      - ".github/workflows/build.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Baixar arquivos
+        uses: actions/checkout@v4
 
-      - name: Preparar projeto Android
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
-          ZIP=$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)
-          if [ -z "$ZIP" ]; then
-            echo "ZIP do projeto não encontrado"
-            exit 1
-          fi
-          mkdir extracted
-          unzip -q "$ZIP" -d extracted
-          ROOT=$(find extracted -name settings.gradle.kts -printf '%h\n' | head -n 1)
-          if [ -z "$ROOT" ]; then
-            echo "Projeto Android não encontrado no ZIP"
-            exit 1
-          fi
-          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
-
-      - uses: actions/setup-java@v4
+      - name: Preparar Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      - name: Preparar Android SDK
+        uses: android-actions/setup-android@v3
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: "8.9"
 
-      - name: Baixar modelo de reconhecimento das mãos
+      - name: Extrair projeto
         run: |
-          mkdir -p "$PROJECT_ROOT/app/src/main/assets"
-          curl -L --fail -o "$PROJECT_ROOT/app/src/main/assets/hand_landmarker.task" \
-            https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+          ZIP=$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)
+          if [ -z "$ZIP" ]; then
+            echo "Arquivo ZIP não encontrado."
+            exit 1
+          fi
+          mkdir projeto
+          unzip -q "$ZIP" -d projeto
+          find projeto -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print
 
       - name: Compilar APK
-        run: gradle -p "$PROJECT_ROOT" assembleDebug --no-daemon
+        run: |
+          ROOT=$(find projeto -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)
+          if [ -z "$ROOT" ]; then
+            echo "Arquivo settings.gradle não encontrado."
+            exit 1
+          fi
+          cd "$(dirname "$ROOT")"
+          gradle assembleDebug
 
-      - uses: actions/upload-artifact@v4
+      - name: Salvar APK
+        uses: actions/upload-artifact@v4
         with:
-          name: TV-Flutuante-APK
-          path: extracted/**/app/build/outputs/apk/debug/app-debug.apk
+          name: VR-BOX-OS-APK
+          path: projeto/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
           
